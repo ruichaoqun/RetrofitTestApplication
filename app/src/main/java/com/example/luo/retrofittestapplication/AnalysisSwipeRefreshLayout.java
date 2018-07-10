@@ -72,7 +72,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
     private static final float DECELERATE_INTERPOLATION_FACTOR = 2f;
     private static final int INVALID_POINTER = -1;
-    private static final float DRAG_RATE = .5f;
+    private static final float DRAG_RATE = 1.0f;
 
     // Max amount of circle that can be filled by progress during swipe gesture,
     // where 1.0 is a full circle
@@ -576,6 +576,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        Log.w("AAA","onLayout");
         final int width = getMeasuredWidth();
         final int height = getMeasuredHeight();
         if (getChildCount() == 0) {
@@ -884,7 +885,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
     private void moveSpinner(float overscrollTop) {
         mProgress.setArrowEnabled(true);
-        Log.w("aaa","overscrollTop-->"+overscrollTop);
+       // Log.w("aaa","overscrollTop-->"+overscrollTop);
         float originalDragPercent = overscrollTop / mTotalDragDistance;
 
         float dragPercent = Math.min(1f, Math.abs(originalDragPercent));
@@ -931,7 +932,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
         float rotation = (-0.25f + .4f * adjustedPercent + tensionPercent * 2) * .5f;
         mProgress.setProgressRotation(rotation);
         int dy = targetY - mCurrentTargetOffsetTop;
-        Log.w("AAA","dy-->"+dy);
+        //Log.w("AAA","dy-->"+dy);
         setTargetOffsetTopAndBottom(dy);
     }
 
@@ -985,11 +986,13 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
         switch (action) {
             case MotionEvent.ACTION_DOWN:
+                //Log.w("AAA","ACTION_DOWN");
                 mActivePointerId = ev.getPointerId(0);
                 mIsBeingDragged = false;
                 break;
 
             case MotionEvent.ACTION_MOVE: {
+                //Log.w("AAA","ACTION_MOVE");
                 pointerIndex = ev.findPointerIndex(mActivePointerId);
                 if (pointerIndex < 0) {
                     Log.e(LOG_TAG, "Got ACTION_MOVE event but have an invalid active pointer id.");
@@ -998,7 +1001,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
                 final float y = ev.getY(pointerIndex);
                 startDragging(y);
-                //Log.w("AAA","ACTION_MOVE-->"+y);
+               // Log.w("AAA","ACTION_MOVE-->"+y);
                 if (mIsBeingDragged) {
                     final float overscrollTop = (y - mInitialMotionY) * DRAG_RATE;
                     //Log.w("AAA","overscrollTop-->"+(overscrollTop));
@@ -1026,6 +1029,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
                 break;
 
             case MotionEvent.ACTION_UP: {
+                //Log.w("AAA","ACTION_UP");
                 pointerIndex = ev.findPointerIndex(mActivePointerId);
                 if (pointerIndex < 0) {
                     Log.e(LOG_TAG, "Got ACTION_UP event but don't have an active pointer id.");
@@ -1042,6 +1046,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
                 return false;
             }
             case MotionEvent.ACTION_CANCEL:
+                //Log.w("AAA","ACTION_CANCEL");
                 return false;
         }
 
@@ -1138,9 +1143,10 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
     }
 
     void setTargetOffsetTopAndBottom(int offset) {
-        mCircleView.bringToFront();
+//        mCircleView.bringToFront();
         ViewCompat.offsetTopAndBottom(mCircleView, offset);
         mCurrentTargetOffsetTop = mCircleView.getTop();
+        //mCurrentTargetOffsetTop += offset;
     }
 
     private void onSecondaryPointerUp(MotionEvent ev) {
