@@ -1,28 +1,45 @@
 package com.example.luo.retrofittestapplication;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.support.v4.view.ViewCompat;
 import android.support.v4.widget.CircularProgressDrawable;
 import android.support.v7.widget.TintTypedArray;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
+import android.view.animation.RotateAnimation;
+import android.view.animation.Transformation;
 import android.widget.AbsListView;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 public class TestSwipeLayout extends ViewGroup {
     private static final float DECELERATE_INTERPOLATOR_DEFAULT_FACTOR = 2.0F;
+
+    private static final int ANIMATE_TO_START_DURATION = 200;
+
     private static final int INVALID_POINTER = -1;
     private static final float DRAG_RATE = .5f;
 
     private int mHeaderHeight;//头部高度
     private View mHeader;//头部View
     private View mContainer;//内容View
+    private ImageView mArrow;
+    private TextView mTitle;
+    private TextView mDate;
 
     //最小滑动距离
     private int touchSlop;
@@ -30,6 +47,7 @@ public class TestSwipeLayout extends ViewGroup {
     //头部view的top
     private int mCurrentTargetOffsetTop;
     private int mOriginalOffsetTop;
+    private int mTotalDragDistance;
     private DecelerateInterpolator mInterpolator;
     private int mMediumAnimationDuration;
     private LayoutInflater mLayoutInflater;
@@ -39,6 +57,14 @@ public class TestSwipeLayout extends ViewGroup {
     private boolean mIsBeingDragged;
     private float mInitialDownY;//初始Y值
     private float mInitialMotionY;//初始移动值
+    private boolean mRefreshing = false;
+    private boolean mNotify;
+    private OnRefreshListener mRefreshListener;
+
+    private final ValueAnimator mAnimatorToStartPosition = ValueAnimator.ofFloat(0, 1).setDuration(ANIMATE_TO_START_DURATION);
+    private final ValueAnimator mAnimatorToRefreshingPosition = ValueAnimator.ofFloat(0,1).setDuration(ANIMATE_TO_START_DURATION);
+    private ObjectAnimator mRefreshingAnimator = ObjectAnimator.ofFloat(mArrow,"scaleX",1,2).setDuration(350);
+
 
     public TestSwipeLayout(Context context) {
         this(context, null);
@@ -56,18 +82,69 @@ public class TestSwipeLayout extends ViewGroup {
         mMediumAnimationDuration = getResources().getInteger(android.R.integer.config_mediumAnimTime);
 
         mInterpolator = new DecelerateInterpolator(DECELERATE_INTERPOLATOR_DEFAULT_FACTOR);
-        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TestSwipeLayout);
+        final TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TestSwipeLayout);
         inflateHeaderView(a.getResourceId(R.styleable.TestSwipeLayout_headLayout, R.layout.classics_header));
         a.recycle();
+
+        mAnimatorToStartPosition.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float currentOffset = mOriginalOffsetTop - (mOriginalOffsetTop - mFrom) * (1 - animation.getAnimatedFraction());
+                setTargetOffsetTopAndBottom((int) (currentOffset - mCurrentTargetOffsetTop));
+            }
+        });
+        mAnimatorToStartPosition.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                super.onAnimationEnd(animation);
+                reset();
+            }
+        });
+
+        mAnimatorToRefreshingPosition.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float currentOffset = mFrom * (1 - animation.getAnimatedFraction());
+                setTargetOffsetTopAndBottom((int) (currentOffset - mCurrentTargetOffsetTop));
+            }
+        });
+        mAnimatorToRefreshingPosition.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                super.onAnimationEnd(animation);
+                mArrow.setImageResource(R.drawable.ic_refreshing);
+                ObjectAnimator animator = ObjectAnimator.ofFloat(mArrow,"rotation",0,360).setDuration(900);
+                animator.setInterpolator(new LinearInterpolator());
+                animator.setRepeatCount(-1);
+                animator.start();
+                if(mNotify){
+                    if(mRefreshListener != null){
+                        mRefreshListener.onRefresh();
+                    }
+                }
+            }
+        });
+
+        mRefreshingAnimator.setRepeatCount(100);
+    }
+
+    private void reset() {
+        mArrow.clearAnimation();
+        mArrow.setImageResource(R.drawable.ic_arrow_bottom);
+        setTargetOffsetTopAndBottom(mOriginalOffsetTop - mCurrentTargetOffsetTop);
     }
 
     private void inflateHeaderView(int resourceId) {
         View view = mLayoutInflater.inflate(resourceId, this, false);
         mHeader = view;
+        mArrow = mHeader.findViewById(R.id.iv_progress);
+        mTitle = mHeader.findViewById(R.id.tv_title);
+        mDate = mHeader.findViewById(R.id.tv_date);
         addView(view);
         ViewGroup.LayoutParams params = mHeader.getLayoutParams();
         mHeaderHeight = params.height;
         mOriginalOffsetTop = mCurrentTargetOffsetTop = -mHeaderHeight;
+        mTotalDragDistance = Math.abs(mHeaderHeight) * 2;//最大下拉距离是头部高度的2倍
     }
 
     @Override
@@ -138,7 +215,7 @@ public class TestSwipeLayout extends ViewGroup {
             mReturningToStart = false;
         }
 
-        if (!isEnabled() || mReturningToStart) {
+        if (!isEnabled() || mReturningToStart || mRefreshing) {
             return false;
         }
 
@@ -187,10 +264,25 @@ public class TestSwipeLayout extends ViewGroup {
         }
     }
 
+    //NestedScrollingParent
+
+
+    @Override
+    public boolean onStartNestedScroll(View child, View target, int nestedScrollAxes) {
+        return isEnabled() && !mReturningToStart && !mRefreshing
+                && (nestedScrollAxes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0;
+    }
+
+    @Override
+    public void onNestedScrollAccepted(View child, View target, int axes) {
+        super.onNestedScrollAccepted(child, target, axes);
+    }
+
     private void setTargetOffsetTopAndBottom(int offset) {
         mHeader.bringToFront();
-        ViewCompat.offsetTopAndBottom(mHeader, offset);
-        mCurrentTargetOffsetTop = mHeader.getTop();
+        //ViewCompat.offsetTopAndBottom(mHeader, offset);
+        float mPreTargetOffsetTop = mCurrentTargetOffsetTop;
+        mCurrentTargetOffsetTop += offset;
     }
 
     private void startDragging(float y) {
@@ -210,7 +302,7 @@ public class TestSwipeLayout extends ViewGroup {
             mReturningToStart = false;
         }
 
-        if (!isEnabled() && mReturningToStart) {
+        if (!isEnabled() || mReturningToStart || mRefreshing) {
             return false;
         }
 
@@ -219,32 +311,121 @@ public class TestSwipeLayout extends ViewGroup {
                 mActivePointId = event.getPointerId(0);
                 mIsBeingDragged = false;
                 break;
-            case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_MOVE: {
                 pointerIndex = event.findPointerIndex(mActivePointId);
-                if(pointerIndex < 0){
+                if (pointerIndex < 0) {
                     return false;
                 }
                 final float y = event.getY(pointerIndex);
                 startDragging(y);
-                if(mIsBeingDragged){
-                    final float overscrollTop = (y - mInitialMotionY)*DRAG_RATE;
-                    if(overscrollTop > 0){
+                if (mIsBeingDragged) {
+                    final float overscrollTop = (y - mInitialMotionY) * DRAG_RATE;
+                    if (overscrollTop > 0) {
                         moveSpinner(overscrollTop);
-                    }else {
+                    } else {
                         return false;
                     }
                 }
 
                 break;
-
-
+            }
+            case MotionEvent.ACTION_UP: {
+                pointerIndex = event.findPointerIndex(mActivePointId);
+                if (pointerIndex < 0) {
+                    return false;
+                }
+                if (mIsBeingDragged) {
+                    mIsBeingDragged = false;
+                    finishSpinner();
+                }
+                mActivePointId = INVALID_POINTER;
+                return false;
+            }
         }
-
-
-        return super.onTouchEvent(event);
+        return true;
     }
 
-    private void moveSpinner(float overscrollTop) {
+    private void finishSpinner() {
+        if (mCurrentTargetOffsetTop > 0) {
+            setRefreshing(true, true);
+        } else {
+            mRefreshing = false;
+            animateOffsetToStartPosition(mCurrentTargetOffsetTop);
+        }
+    }
 
+    private void animateOffsetToStartPosition(int currentTargetOffsetTop) {
+        mFrom = currentTargetOffsetTop;
+        mAnimatorToStartPosition.start();
+    }
+
+    private void animateOffsetToRefreshingPosition(int currentTargetOffsetTop){
+        mFrom = currentTargetOffsetTop;
+        mAnimatorToRefreshingPosition.start();
+    }
+
+
+    private float mFrom;
+
+    private void moveSpinner(float overscrollTop) {
+        //下拉距离和最大下拉距离百分比
+        float originalDragPercent = overscrollTop / mTotalDragDistance;
+        //大于1修正
+        float dragPercent = Math.min(1, Math.abs(originalDragPercent));
+        float trueDragDistance = (float) (1 - Math.pow(1 - originalDragPercent, 3)) * mTotalDragDistance;
+        int offset = (int) (trueDragDistance - (-mOriginalOffsetTop + mCurrentTargetOffsetTop));
+        int mPreTargetOffsetTop = mCurrentTargetOffsetTop;
+        setTargetOffsetTopAndBottom(offset);
+        if (mPreTargetOffsetTop * mCurrentTargetOffsetTop <= 0) {
+            if (mCurrentTargetOffsetTop >= 0) {
+                animateArrow(true);
+            } else {
+                animateArrow(false);
+            }
+        }
+    }
+
+    private void animateArrow(boolean isDown) {
+        if (isDown) {
+            mArrow.animate().rotation(180).setListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    super.onAnimationStart(animation);
+                }
+            }).start();
+        } else {
+            mArrow.animate().rotation(0).setListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    super.onAnimationStart(animation);
+                }
+            }).start();
+        }
+    }
+
+    private void setRefreshing(boolean refreshing, boolean notify) {
+        if (mRefreshing != refreshing) {
+            mNotify = notify;
+            ensureTarget();
+            mRefreshing = refreshing;
+            if (mRefreshing) {
+                animateOffsetToRefreshingPosition(mCurrentTargetOffsetTop);
+            } else {
+                animateOffsetToStartPosition(mCurrentTargetOffsetTop);
+            }
+        }
+    }
+
+
+    public interface OnRefreshListener {
+        void onRefresh();
+    }
+
+    public void setRefreshing(boolean refreshing){
+        setRefreshing(refreshing,false);
+    }
+
+    public void setRefreshListener(OnRefreshListener refreshListener) {
+        mRefreshListener = refreshListener;
     }
 }
