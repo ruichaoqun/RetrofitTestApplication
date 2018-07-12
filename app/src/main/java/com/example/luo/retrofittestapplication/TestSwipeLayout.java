@@ -60,10 +60,11 @@ public class TestSwipeLayout extends ViewGroup {
     private boolean mRefreshing = false;
     private boolean mNotify;
     private OnRefreshListener mRefreshListener;
+    private int[] mParentScrollConsumed = new int[2];
 
     private final ValueAnimator mAnimatorToStartPosition = ValueAnimator.ofFloat(0, 1).setDuration(ANIMATE_TO_START_DURATION);
-    private final ValueAnimator mAnimatorToRefreshingPosition = ValueAnimator.ofFloat(0,1).setDuration(ANIMATE_TO_START_DURATION);
-    private ObjectAnimator mRefreshingAnimator = ObjectAnimator.ofFloat(mArrow,"scaleX",1,2).setDuration(350);
+    private final ValueAnimator mAnimatorToRefreshingPosition = ValueAnimator.ofFloat(0, 1).setDuration(ANIMATE_TO_START_DURATION);
+    private ObjectAnimator mRefreshingAnimator = ObjectAnimator.ofFloat(mArrow, "scaleX", 1, 2).setDuration(350);
 
 
     public TestSwipeLayout(Context context) {
@@ -112,13 +113,14 @@ public class TestSwipeLayout extends ViewGroup {
             @Override
             public void onAnimationEnd(Animator animation) {
                 super.onAnimationEnd(animation);
+                mTitle.setText("正在刷新。。。");
                 mArrow.setImageResource(R.drawable.ic_refreshing);
-                ObjectAnimator animator = ObjectAnimator.ofFloat(mArrow,"rotation",0,360).setDuration(900);
+                ObjectAnimator animator = ObjectAnimator.ofFloat(mArrow, "rotation", 0, 360).setDuration(900);
                 animator.setInterpolator(new LinearInterpolator());
                 animator.setRepeatCount(-1);
                 animator.start();
-                if(mNotify){
-                    if(mRefreshListener != null){
+                if (mNotify) {
+                    if (mRefreshListener != null) {
                         mRefreshListener.onRefresh();
                     }
                 }
@@ -189,10 +191,11 @@ public class TestSwipeLayout extends ViewGroup {
         final int childTop = getPaddingTop();
         final int childWidth = width - getPaddingLeft() - getPaddingRight();
         final int childHeight = height - getPaddingTop() - getPaddingBottom();
-        mContainer.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
+
         int headerWidth = mHeader.getMeasuredWidth();
         int headerHeight = mHeader.getMeasuredHeight();
         mHeader.layout(width / 2 - headerWidth / 2, mCurrentTargetOffsetTop, width / 2 + headerWidth / 2, mCurrentTargetOffsetTop + headerHeight);
+        mContainer.layout(childLeft, mCurrentTargetOffsetTop + headerHeight, childLeft + childWidth, mCurrentTargetOffsetTop + headerHeight + childHeight);
     }
 
     public void ensureTarget() {
@@ -215,7 +218,7 @@ public class TestSwipeLayout extends ViewGroup {
             mReturningToStart = false;
         }
 
-        if (!isEnabled() || mReturningToStart || mRefreshing) {
+        if (!isEnabled() || mReturningToStart || mRefreshing || mNestScrollInProgress) {
             return false;
         }
 
@@ -265,23 +268,88 @@ public class TestSwipeLayout extends ViewGroup {
     }
 
     //NestedScrollingParent
+    private int mTotalUncosumed;
+    private boolean mNestScrollInProgress;
 
-
+    /**
+     * 声明在那些情况下可以允许嵌套滚动
+     * @param child
+     * @param target
+     * @param nestedScrollAxes
+     * @return
+     */
     @Override
     public boolean onStartNestedScroll(View child, View target, int nestedScrollAxes) {
         return isEnabled() && !mReturningToStart && !mRefreshing
                 && (nestedScrollAxes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0;
     }
 
+    /**
+     * onStartNestedScroll返回true调用，用于初始化相关工作
+     * @param child
+     * @param target
+     * @param axes
+     */
     @Override
     public void onNestedScrollAccepted(View child, View target, int axes) {
         super.onNestedScrollAccepted(child, target, axes);
+        mTotalUncosumed = 0;
+        mNestScrollInProgress = true;
+    }
+
+    @Override
+    public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
+        //如果当前滑动距离大于0且手指向上拖动，parentView需要先于子View处理滑动
+//        Log.w("AAA","dy-->"+dy);
+        if (dy > 0 && mTotalUncosumed > 0) {
+            //本次touch滑动距离大于总滑动距离
+            if (dy > mTotalUncosumed) {
+                //滑动距离
+                consumed[1] = mTotalUncosumed;
+                //总滑动距离归0
+                mTotalUncosumed = 0;
+            } else {
+                //总滑动距离减去dy
+                mTotalUncosumed -= dy;
+                //滑动距离
+                consumed[1] = dy;
+            }
+            //开始滑动
+            moveSpinner(mTotalUncosumed/2);
+        }
+
+        //再由父View来消费剩余距离
+        final int[] parentConsumed = mParentScrollConsumed;
+        super.onNestedPreScroll(target, dx - consumed[0], dy - consumed[1], parentConsumed);
+        consumed[0] += mParentScrollConsumed[0];
+        consumed[1] += mParentScrollConsumed[1];
+    }
+
+    @Override
+    public void onStopNestedScroll(View child) {
+        super.onStopNestedScroll(child);
+        mNestScrollInProgress = false;
+        if (mTotalUncosumed > 0) {
+            finishSpinner();
+            mTotalUncosumed = 0;
+        }
+    }
+
+    @Override
+    public void onNestedScroll(View target, int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed) {
+        //先由父View处理消费事件
+        super.onNestedScroll(target, dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed);
+        if (dyUnconsumed < 0) {
+            mTotalUncosumed += Math.abs(dyUnconsumed);
+//            Log.w("AAA","mTotalUncosumed-->"+mTotalUncosumed);
+            moveSpinner(mTotalUncosumed/2);
+        }
     }
 
     private void setTargetOffsetTopAndBottom(int offset) {
-        mHeader.bringToFront();
-        //ViewCompat.offsetTopAndBottom(mHeader, offset);
-        float mPreTargetOffsetTop = mCurrentTargetOffsetTop;
+        //mHeader.bringToFront();
+        ViewCompat.offsetTopAndBottom(mHeader, offset);
+        ViewCompat.offsetTopAndBottom(mContainer,offset);
         mCurrentTargetOffsetTop += offset;
     }
 
@@ -302,7 +370,7 @@ public class TestSwipeLayout extends ViewGroup {
             mReturningToStart = false;
         }
 
-        if (!isEnabled() || mReturningToStart || mRefreshing) {
+        if (!isEnabled() || mReturningToStart || mRefreshing || mNestScrollInProgress) {
             return false;
         }
 
@@ -359,7 +427,7 @@ public class TestSwipeLayout extends ViewGroup {
         mAnimatorToStartPosition.start();
     }
 
-    private void animateOffsetToRefreshingPosition(int currentTargetOffsetTop){
+    private void animateOffsetToRefreshingPosition(int currentTargetOffsetTop) {
         mFrom = currentTargetOffsetTop;
         mAnimatorToRefreshingPosition.start();
     }
@@ -372,14 +440,16 @@ public class TestSwipeLayout extends ViewGroup {
         float originalDragPercent = overscrollTop / mTotalDragDistance;
         //大于1修正
         float dragPercent = Math.min(1, Math.abs(originalDragPercent));
-        float trueDragDistance = (float) (1 - Math.pow(1 - originalDragPercent, 3)) * mTotalDragDistance;
+        float trueDragDistance = (float) (1 - Math.pow(1 - dragPercent, 3)) * mTotalDragDistance;
         int offset = (int) (trueDragDistance - (-mOriginalOffsetTop + mCurrentTargetOffsetTop));
         int mPreTargetOffsetTop = mCurrentTargetOffsetTop;
         setTargetOffsetTopAndBottom(offset);
         if (mPreTargetOffsetTop * mCurrentTargetOffsetTop <= 0) {
             if (mCurrentTargetOffsetTop >= 0) {
+                mTitle.setText("可以了");
                 animateArrow(true);
             } else {
+                mTitle.setText("使劲拉！");
                 animateArrow(false);
             }
         }
@@ -421,8 +491,8 @@ public class TestSwipeLayout extends ViewGroup {
         void onRefresh();
     }
 
-    public void setRefreshing(boolean refreshing){
-        setRefreshing(refreshing,false);
+    public void setRefreshing(boolean refreshing) {
+        setRefreshing(refreshing, false);
     }
 
     public void setRefreshListener(OnRefreshListener refreshListener) {

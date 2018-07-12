@@ -80,11 +80,11 @@ public class MainActivity extends AppCompatActivity {
 //            }
 //        });
 
-//        RecyclerView recyclerView = findViewById(R.id.rl);
-//        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-//        recyclerView.addItemDecoration(new DividerItemDecoration(this,RecyclerView.VERTICAL));
-//        Adapter adapter = new Adapter();
-//        recyclerView.setAdapter(adapter);
+        RecyclerView recyclerView = findViewById(R.id.rl);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.addItemDecoration(new DividerItemDecoration(this,RecyclerView.VERTICAL));
+        Adapter adapter = new Adapter();
+        recyclerView.setAdapter(adapter);
 
     }
 

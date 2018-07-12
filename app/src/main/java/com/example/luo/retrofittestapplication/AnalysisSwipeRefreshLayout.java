@@ -590,14 +590,16 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
         }
         final View child = mTarget;
         final int childLeft = getPaddingLeft();
-        final int childTop = getPaddingTop();
+
         final int childWidth = width - getPaddingLeft() - getPaddingRight();
         final int childHeight = height - getPaddingTop() - getPaddingBottom();
-        child.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
+
         int circleWidth = mCircleView.getMeasuredWidth();
         int circleHeight = mCircleView.getMeasuredHeight();
         mCircleView.layout((width / 2 - circleWidth / 2), mCurrentTargetOffsetTop,
                 (width / 2 + circleWidth / 2), mCurrentTargetOffsetTop + circleHeight);
+        int childTop = mCurrentTargetOffsetTop + circleHeight+getPaddingTop();
+        child.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
     }
 
     @Override
@@ -1143,10 +1145,10 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
     }
 
     void setTargetOffsetTopAndBottom(int offset) {
-//        mCircleView.bringToFront();
-        ViewCompat.offsetTopAndBottom(mCircleView, offset);
-        mCurrentTargetOffsetTop = mCircleView.getTop();
-        //mCurrentTargetOffsetTop += offset;
+        mCircleView.bringToFront();
+       // ViewCompat.offsetTopAndBottom(mCircleView, offset);
+        //mCurrentTargetOffsetTop = mCircleView.getTop();
+        mCurrentTargetOffsetTop += offset;
     }
 
     private void onSecondaryPointerUp(MotionEvent ev) {
