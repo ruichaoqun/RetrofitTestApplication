@@ -2,8 +2,14 @@ package com.example.luo.retrofittestapplication;
 
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.design.widget.BottomNavigationView;
+import android.support.design.widget.TabLayout;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewCompat;
+import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
@@ -79,12 +85,19 @@ public class MainActivity extends AppCompatActivity {
 //
 //            }
 //        });
+//
+//        RecyclerView recyclerView = findViewById(R.id.rl);
+//        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+//        recyclerView.addItemDecoration(new DividerItemDecoration(this,RecyclerView.VERTICAL));
+//        Adapter adapter = new Adapter();
+//        recyclerView.setAdapter(adapter);
+        CustomCoordinateLayout layout = findViewById(R.id.rl);
+        ViewPager vp = layout.getBottomView().findViewById(R.id.viewpager);
+        TabLayout layout1 = layout.getBottomView().findViewById(R.id.tabs);
+        SectionsPagerAdapter mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager());
 
-        RecyclerView recyclerView = findViewById(R.id.rl);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.addItemDecoration(new DividerItemDecoration(this,RecyclerView.VERTICAL));
-        Adapter adapter = new Adapter();
-        recyclerView.setAdapter(adapter);
+        vp.setAdapter(mSectionsPagerAdapter);
+        layout1.setupWithViewPager(vp);
 
     }
 
@@ -122,6 +135,32 @@ public class MainActivity extends AppCompatActivity {
     class ViewHold extends RecyclerView.ViewHolder{
         public ViewHold(View itemView) {
             super(itemView);
+        }
+    }
+
+    public class SectionsPagerAdapter extends FragmentPagerAdapter {
+
+        public SectionsPagerAdapter(FragmentManager fm) {
+            super(fm);
+        }
+
+        @Override
+        public Fragment getItem(int position) {
+            // getItem is called to instantiate the fragment for the given page.
+            // Return a PlaceholderFragment (defined as a static inner class below).
+            return PlaceholderFragment.newInstance(position + 1);
+        }
+
+        @Override
+        public int getCount() {
+            // Show 3 total pages.
+            return 3;
+        }
+
+        @Nullable
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return position+"";
         }
     }
 
