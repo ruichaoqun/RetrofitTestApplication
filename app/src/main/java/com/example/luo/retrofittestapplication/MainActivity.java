@@ -22,6 +22,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.gyf.barlibrary.ImmersionBar;
 import com.readystatesoftware.chuck.ChuckInterceptor;
 
 import java.io.IOException;
@@ -68,7 +69,8 @@ public class MainActivity extends AppCompatActivity {
 
         mTextMessage = (TextView) findViewById(R.id.message);
 
-
+        ImmersionBar.with(this)
+                .transparentStatusBar().init();
 
         Retrofit retrofit = new Retrofit.Builder().baseUrl("http://gank.io/api/data/")
                 .addConverterFactory(GsonConverterFactory.create())
@@ -99,6 +101,12 @@ public class MainActivity extends AppCompatActivity {
         vp.setAdapter(mSectionsPagerAdapter);
         layout1.setupWithViewPager(vp);
 
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        ImmersionBar.with(this).destroy();
     }
 
     public class Adapter extends RecyclerView.Adapter<ViewHold>{
