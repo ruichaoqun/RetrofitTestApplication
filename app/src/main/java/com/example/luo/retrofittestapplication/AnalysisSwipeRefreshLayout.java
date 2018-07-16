@@ -576,7 +576,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        Log.w("AAA","onLayout");
+//        Log.w("AAA","onLayout-->"+mCurrentTargetOffsetTop);
         final int width = getMeasuredWidth();
         final int height = getMeasuredHeight();
         if (getChildCount() == 0) {
@@ -599,6 +599,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
         mCircleView.layout((width / 2 - circleWidth / 2), mCurrentTargetOffsetTop,
                 (width / 2 + circleWidth / 2), mCurrentTargetOffsetTop + circleHeight);
         int childTop = mCurrentTargetOffsetTop + circleHeight+getPaddingTop();
+
         child.layout(childLeft, childTop, childLeft + childWidth, childTop + childHeight);
     }
 
@@ -751,6 +752,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
     @Override
     public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
+        Log.w("AAA","onNestedPreScroll-->"+dy);
         // If we are in the middle of consuming, a scroll, then we want to move the spinner back up
         // before allowing the list to scroll
         if (dy > 0 && mTotalUnconsumed > 0) {
@@ -803,6 +805,7 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
     @Override
     public void onNestedScroll(final View target, final int dxConsumed, final int dyConsumed,
                                final int dxUnconsumed, final int dyUnconsumed) {
+//        Log.w("AAA","onNestedScroll-->"+dyUnconsumed);
         // Dispatch up to the nested parent first
         dispatchNestedScroll(dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed,
                 mParentOffsetInWindow);
@@ -1146,9 +1149,9 @@ public class AnalysisSwipeRefreshLayout  extends ViewGroup implements NestedScro
 
     void setTargetOffsetTopAndBottom(int offset) {
         mCircleView.bringToFront();
-       // ViewCompat.offsetTopAndBottom(mCircleView, offset);
-        //mCurrentTargetOffsetTop = mCircleView.getTop();
-        mCurrentTargetOffsetTop += offset;
+        ViewCompat.offsetTopAndBottom(mCircleView, offset);
+        mCurrentTargetOffsetTop = mCircleView.getTop();
+        //mCurrentTargetOffsetTop += offset;
     }
 
     private void onSecondaryPointerUp(MotionEvent ev) {
